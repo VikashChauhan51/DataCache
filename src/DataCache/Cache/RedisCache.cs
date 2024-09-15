@@ -4,12 +4,6 @@ using System.Text.Json;
 
 namespace DataCache.Cache;
 
-using StackExchange.Redis;
-using System;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-
 public class RedisCache : CacheBase, ICacheAsync
 {
     private readonly IDatabase _redisDatabase;
@@ -57,15 +51,21 @@ public class RedisCache : CacheBase, ICacheAsync
             var value = await _redisDatabase.StringGetAsync(key);
             if (value.HasValue)
             {
-                var item = JsonSerializer.Deserialize<CacheItem?>(value!);
-                if (_options.Optimized)
+                var item = JsonSerializer.Deserialize<CacheItem>(value);
+                if (_options.Optimized && item != null)
                 {
                     // Cache in memory if optimized
-                    await _inMemoryCache.PutAsync(key, item!);
+                    await _inMemoryCache.PutAsync(key, item);
+
+                    // Update TTL if present
+                    if (item.Ttl.HasValue)
+                    {
+                        await _redisDatabase.KeyExpireAsync(key, item.Ttl.Value);
+                    }
                 }
                 return item;
             }
-            return default!;
+            return null;
         }
         finally
         {
@@ -88,10 +88,15 @@ public class RedisCache : CacheBase, ICacheAsync
             if (_options.Optimized)
             {
                 // Add to in-memory cache
-                await _inMemoryCache.PutAsync(key, item!);
+                await _inMemoryCache.PutAsync(key, item);
             }
 
-            await _redisDatabase.StringSetAsync(key, JsonSerializer.Serialize<CacheItem>(item));
+            // Serialize item once
+            var serializedItem = JsonSerializer.Serialize(item);
+            var ttl = item.Ttl.HasValue ? (TimeSpan?)item.Ttl.Value : null;
+
+            // Set cache in Redis with TTL
+            await _redisDatabase.StringSetAsync(key, serializedItem, ttl);
         }
         finally
         {
