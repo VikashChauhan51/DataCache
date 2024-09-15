@@ -1,6 +1,3 @@
-Here's a possible `README.md` example for your [DataCache repository](https://github.com/VikashChauhan51/DataCache):
-
----
 
 # DataCache
 
