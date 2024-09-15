@@ -4,35 +4,43 @@
 /// <summary>
 /// This strategy tracks the order of keys to determine which one is the most recently used.
 /// </summary>
-public class MruEvictionStrategy : IEvictionStrategy<string>
+public class MruEvictionStrategy : IEvictionStrategyAsync<string>
 {
     private readonly LinkedList<string> _accessOrder = new();
     private readonly Dictionary<string, LinkedListNode<string>> _cacheMap = new();
     private readonly object _lock = new();
-    public void AccessItem(string key)
+
+    /// <inheritdoc />
+    public Task AccessItemAsync(string key)
     {
         lock (_lock)
         {
-            if (_cacheMap.ContainsKey(key))
+            if (_cacheMap.TryGetValue(key, out var node))
             {
-                var node = _cacheMap[key];
                 _accessOrder.Remove(node);
                 _accessOrder.AddFirst(node);
             }
         }
+        return Task.CompletedTask;
     }
 
-    public void AddItem(string key)
+    /// <inheritdoc />
+    public Task AddItemAsync(string key)
     {
         lock (_lock)
         {
-            var node = new LinkedListNode<string>(key);
-            _accessOrder.AddFirst(node);
-            _cacheMap[key] = node;
+            if (!_cacheMap.ContainsKey(key))
+            {
+                var node = new LinkedListNode<string>(key);
+                _accessOrder.AddFirst(node);
+                _cacheMap[key] = node;
+            }
         }
+        return Task.CompletedTask;
     }
 
-    public void RemoveItem(string key)
+    /// <inheritdoc />
+    public Task RemoveItemAsync(string key)
     {
         lock (_lock)
         {
@@ -42,9 +50,11 @@ public class MruEvictionStrategy : IEvictionStrategy<string>
                 _cacheMap.Remove(key);
             }
         }
+        return Task.CompletedTask;
     }
 
-    public string EvictItem()
+    /// <inheritdoc />
+    public Task<string> EvictItemAsync()
     {
         lock (_lock)
         {
@@ -53,10 +63,9 @@ public class MruEvictionStrategy : IEvictionStrategy<string>
             {
                 _accessOrder.RemoveFirst();
                 _cacheMap.Remove(mostRecent.Value);
-                return mostRecent.Value;
+                return Task.FromResult(mostRecent.Value);
             }
-
-            throw new InvalidOperationException("No items to evict");
         }
+        return Task.FromResult<string>(default!);
     }
 }

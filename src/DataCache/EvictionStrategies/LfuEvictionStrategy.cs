@@ -4,53 +4,65 @@
 /// <summary>
 /// This strategy tracks the frequency of access to determine which key is the least frequently used.
 /// </summary>
-public class LfuEvictionStrategy : IEvictionStrategy<string>
+public class LfuEvictionStrategy : IEvictionStrategyAsync<string>
 {
     private readonly Dictionary<string, int> _accessCounts = new();
     private readonly SortedDictionary<int, HashSet<string>> _frequencyMap = new();
     private readonly object _lock = new();
-    public void AccessItem(string key)
+
+    /// <inheritdoc />
+    public Task AccessItemAsync(string key)
     {
         lock (_lock)
         {
-            if (_accessCounts.ContainsKey(key))
+            if (_accessCounts.TryGetValue(key, out var oldFrequency))
             {
-                int oldFrequency = _accessCounts[key];
-                _accessCounts[key] = oldFrequency + 1;
+                // Update frequency map by removing from old frequency and adding to new frequency
                 _frequencyMap[oldFrequency].Remove(key);
                 if (_frequencyMap[oldFrequency].Count == 0)
                 {
                     _frequencyMap.Remove(oldFrequency);
                 }
 
-                if (!_frequencyMap.ContainsKey(oldFrequency + 1))
+                var newFrequency = oldFrequency + 1;
+                _accessCounts[key] = newFrequency;
+
+                if (!_frequencyMap.TryGetValue(newFrequency, out var keysAtNewFrequency))
                 {
-                    _frequencyMap[oldFrequency + 1] = new HashSet<string>();
+                    keysAtNewFrequency = new HashSet<string>();
+                    _frequencyMap[newFrequency] = keysAtNewFrequency;
                 }
-                _frequencyMap[oldFrequency + 1].Add(key);
+                keysAtNewFrequency.Add(key);
             }
         }
+        return Task.CompletedTask;
     }
 
-    public void AddItem(string key)
+    /// <inheritdoc />
+    public Task AddItemAsync(string key)
     {
         lock (_lock)
         {
+            // Initialize frequency to 1 for new items
             _accessCounts[key] = 1;
-            if (!_frequencyMap.ContainsKey(1))
+            if (!_frequencyMap.TryGetValue(1, out var keysAtFrequencyOne))
             {
-                _frequencyMap[1] = new HashSet<string>();
+                keysAtFrequencyOne = new HashSet<string>();
+                _frequencyMap[1] = keysAtFrequencyOne;
             }
-            _frequencyMap[1].Add(key);
+            keysAtFrequencyOne.Add(key);
         }
+        return Task.CompletedTask;
     }
 
-    public void RemoveItem(string key)
+    /// <inheritdoc />
+    public Task RemoveItemAsync(string key)
     {
         lock (_lock)
         {
             if (_accessCounts.TryGetValue(key, out var frequency))
             {
+                // Remove the key from the frequency map and access counts
                 _frequencyMap[frequency].Remove(key);
                 if (_frequencyMap[frequency].Count == 0)
                 {
@@ -59,27 +71,31 @@ public class LfuEvictionStrategy : IEvictionStrategy<string>
                 _accessCounts.Remove(key);
             }
         }
+        return Task.CompletedTask;
     }
 
-    public string EvictItem()
+    /// <inheritdoc />
+    public Task<string> EvictItemAsync()
     {
         lock (_lock)
         {
-            if (_frequencyMap.Count == 0)
+            if (_frequencyMap.Count > 0)
             {
-                throw new InvalidOperationException("No items to evict");
-            }
+                // Get the set of items with the least frequency (first entry in SortedDictionary)
+                var leastFrequent = _frequencyMap.First();
+                var key = leastFrequent.Value.First();
 
-            var leastFrequent = _frequencyMap.First();
-            var key = leastFrequent.Value.First();
-            leastFrequent.Value.Remove(key);
-            if (leastFrequent.Value.Count == 0)
-            {
-                _frequencyMap.Remove(leastFrequent.Key);
-            }
+                // Remove the evicted key from the frequency map and access counts
+                leastFrequent.Value.Remove(key);
+                if (leastFrequent.Value.Count == 0)
+                {
+                    _frequencyMap.Remove(leastFrequent.Key);
+                }
+                _accessCounts.Remove(key);
 
-            _accessCounts.Remove(key);
-            return key;
+                return Task.FromResult(key);
+            }
         }
+        return Task.FromResult<string>(default!);
     }
 }
