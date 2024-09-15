@@ -42,7 +42,7 @@ public abstract class CacheBase
     /// Evicts cache items to make room for a new item of the specified size, based on the configured eviction strategy.
     /// </summary>
     /// <param name="valueSize">The size of the new item to be added to the cache.</param>
-    protected async Task EvictItemsToFit(long valueSize)
+    protected virtual async Task EvictItemsToFit(long valueSize)
     {
         if (_cacheOptions.EvictionType == Eviction.None || _currentMemorySize + valueSize <= _cacheOptions.MaxMemorySize)
         {

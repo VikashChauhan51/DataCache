@@ -8,13 +8,12 @@ public class RedisCache : CacheBase, ICacheAsync
 {
     private readonly IDatabase _redisDatabase;
     private readonly RedisCacheOptions _options;
-    private readonly MemoryCache _inMemoryCache;
     private readonly SemaphoreSlim _cacheLock = new SemaphoreSlim(1, 1);
 
     /// <summary>
     /// Gets the count of items in the in-memory cache.
     /// </summary>
-    public long Count => _inMemoryCache.Count;
+    public long Count => _cacheMap.Count;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RedisCache"/> class.
@@ -26,7 +25,6 @@ public class RedisCache : CacheBase, ICacheAsync
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _redisDatabase = connectionMultiplexer.GetDatabase(_options.DatabaseIndex);
-        _inMemoryCache = new MemoryCache(options);
     }
 
     /// <summary>
@@ -39,23 +37,19 @@ public class RedisCache : CacheBase, ICacheAsync
         await _cacheLock.WaitAsync();
         try
         {
-            if (_options.Optimized)
+            if (_options.Optimized && _cacheMap.TryGetValue(key, out var cacheItem))
             {
-                var cacheItem = await _inMemoryCache.GetAsync(key);
-                if (cacheItem != null)
-                {
-                    return cacheItem;
-                }
+                return cacheItem;
             }
 
             var value = await _redisDatabase.StringGetAsync(key);
             if (value.HasValue)
             {
-                var item = JsonSerializer.Deserialize<CacheItem>(value);
+                var item = JsonSerializer.Deserialize<CacheItem?>(value!);
                 if (_options.Optimized && item != null)
                 {
                     // Cache in memory if optimized
-                    await _inMemoryCache.PutAsync(key, item);
+                    _cacheMap.TryAdd(key, item);
 
                     // Update TTL if present
                     if (item.Ttl.HasValue)
@@ -84,11 +78,13 @@ public class RedisCache : CacheBase, ICacheAsync
         try
         {
             item = item ?? new CacheItem(default!, DateTime.UtcNow, default);
+            long valueSize = CalculateCacheItemSize(item);
+            await EvictItemsToFit(valueSize);
 
             if (_options.Optimized)
             {
                 // Add to in-memory cache
-                await _inMemoryCache.PutAsync(key, item);
+                _cacheMap.TryAdd(key, item);
             }
 
             // Serialize item once
@@ -97,9 +93,10 @@ public class RedisCache : CacheBase, ICacheAsync
 
             // Set cache in Redis with TTL
             await _redisDatabase.StringSetAsync(key, serializedItem, ttl);
+            _currentMemorySize += valueSize;
         }
         finally
-        {
+        {          
             _cacheLock.Release();
         }
     }
@@ -113,7 +110,7 @@ public class RedisCache : CacheBase, ICacheAsync
         await _cacheLock.WaitAsync();
         try
         {
-            await _inMemoryCache.DeleteAsync(key);
+            _cacheMap.TryRemove(key, out var _);
             await _redisDatabase.KeyDeleteAsync(key);
         }
         finally
@@ -121,4 +118,24 @@ public class RedisCache : CacheBase, ICacheAsync
             _cacheLock.Release();
         }
     }
+
+    protected override async Task EvictItemsToFit(long valueSize)
+    {
+        if (_cacheOptions.EvictionType == Eviction.None || _currentMemorySize + valueSize <= _cacheOptions.MaxMemorySize)
+        {
+            return;
+        }
+
+        while (_currentMemorySize + valueSize > _cacheOptions.MaxMemorySize)
+        {
+            var evictKey = await _evictionStrategy.EvictItemAsync();
+            var deleted = await _redisDatabase.KeyDeleteAsync(evictKey);
+            if (_cacheMap.TryRemove(evictKey, out var evictedItem) || deleted)
+            {
+                _currentMemorySize -= CalculateCacheItemSize(evictedItem!);
+            }
+
+        }
+    }
+
 }
