@@ -42,6 +42,16 @@ public class CacheOptions
     /// <param name="ttlInterval">The time interval between checks for expired cache items.</param>
     public CacheOptions(long maxMemorySize, Eviction evictionType, TimeSpan ttlInterval)
     {
+        if (maxMemorySize < 0)
+            throw new ArgumentOutOfRangeException(nameof(maxMemorySize), "MaxMemorySize cannot be negative");
+
+        if (!Enum.IsDefined(typeof(Eviction), evictionType))
+            throw new ArgumentException("Invalid eviction type", nameof(evictionType));
+
+        if (ttlInterval < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(ttlInterval), "TTL interval cannot be negative");
+
+
         MaxMemorySize = maxMemorySize;
         EvictionType = evictionType;
         TtlInterval = ttlInterval;

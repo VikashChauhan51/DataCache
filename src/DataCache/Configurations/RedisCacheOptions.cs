@@ -34,6 +34,9 @@ public class RedisCacheOptions : CacheOptions
     public RedisCacheOptions(long maxMemorySize, Eviction evictionType, TimeSpan TtlInterval, int databaseIndex, bool optimized)
         : base(maxMemorySize, evictionType, TtlInterval)
     {
+        if (databaseIndex < 0)
+            throw new ArgumentOutOfRangeException(nameof(maxMemorySize), "DatabaseIndex cannot be negative");
+
         DatabaseIndex = databaseIndex;
         Optimized = optimized;
     }

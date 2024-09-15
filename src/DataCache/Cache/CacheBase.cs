@@ -44,7 +44,9 @@ public abstract class CacheBase
     /// <param name="valueSize">The size of the new item to be added to the cache.</param>
     protected virtual async Task EvictItemsToFit(long valueSize)
     {
-        if (_cacheOptions.EvictionType == Eviction.None || _currentMemorySize + valueSize <= _cacheOptions.MaxMemorySize)
+        if (_cacheOptions.EvictionType == Eviction.None ||
+            _cacheOptions.MaxMemorySize <= 0 ||
+            _currentMemorySize + valueSize <= _cacheOptions.MaxMemorySize)
         {
             return;
         }

@@ -121,7 +121,9 @@ public class RedisCache : CacheBase, ICacheAsync
 
     protected override async Task EvictItemsToFit(long valueSize)
     {
-        if (_cacheOptions.EvictionType == Eviction.None || _currentMemorySize + valueSize <= _cacheOptions.MaxMemorySize)
+        if (_cacheOptions.EvictionType == Eviction.None ||
+            _cacheOptions.MaxMemorySize <= 0 ||
+            _currentMemorySize + valueSize <= _cacheOptions.MaxMemorySize)
         {
             return;
         }
