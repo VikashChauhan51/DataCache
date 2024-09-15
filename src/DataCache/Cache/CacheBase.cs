@@ -1,11 +1,12 @@
 ﻿using DataCache.Configurations;
 using DataCache.EvictionStrategies;
+using System.Collections.Concurrent;
 
 namespace DataCache.Cache;
 
 public abstract class CacheBase
 {
-    protected readonly Dictionary<string, CacheItem> _cacheMap = new();
+    protected static readonly ConcurrentDictionary<string, CacheItem> _cacheMap = new();
     protected readonly CacheOptions _cacheOptions;
     protected IEvictionStrategy<string> _evictionStrategy;
     protected long _currentMemorySize;
@@ -19,14 +20,15 @@ public abstract class CacheBase
             { Eviction.None, () => new DefaultEvictionStrategy() }
         };
 
-
+     
     protected CacheBase(CacheOptions cacheOptions)
     {
-        _cacheOptions = cacheOptions ?? new(0, Eviction.None);
+        _cacheOptions = cacheOptions ?? new(0, Eviction.None, TimeSpan.Zero);
         _evictionStrategy = _strategyMap[_cacheOptions.EvictionType]();
         _currentMemorySize = 0;
     }
 
+     
     protected void EvictItemsToFit(long valueSize)
     {
         if (_cacheOptions.EvictionType != Eviction.None && _currentMemorySize + valueSize > _cacheOptions.MaxMemorySize)
@@ -35,7 +37,7 @@ public abstract class CacheBase
             {
                 var evictKey = _evictionStrategy.EvictItem();
                 var evictedItem = _cacheMap[evictKey];
-                _cacheMap.Remove(evictKey);
+                _cacheMap.TryRemove(evictKey,out var _);
                 _currentMemorySize -= CalculateCacheItemSize(evictedItem);
             }
         }
@@ -46,13 +48,12 @@ public abstract class CacheBase
         {
             // Calculate size of the string (each char is 2 bytes in .NET)
             long dataSize = (item.Value?.Length ?? 0) * sizeof(char);
-            // Add size of DateTimeOffset (16 bytes in .NET)
-            dataSize += 16;
+            // Add size of DateTimeOffset (16 bytes in .NET) and 4 bytes for TimeSpan
+            dataSize += 20;
 
             return dataSize;
         }
 
         return 0;
     }
-
 }

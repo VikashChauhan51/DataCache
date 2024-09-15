@@ -7,8 +7,8 @@ public class RedisCacheOptions : CacheOptions
     public int DatabaseIndex { get; init; }
     public bool Optimized { get; init; }
 
-    public RedisCacheOptions(long maxMemorySize, Eviction evictionType, int databaseIndex, bool optimized)
-        : base(maxMemorySize, evictionType)
+    public RedisCacheOptions(long maxMemorySize, Eviction evictionType, TimeSpan ttl, int databaseIndex, bool optimized)
+        : base(maxMemorySize, evictionType, ttl)
     {
         DatabaseIndex = databaseIndex;
         Optimized = optimized;

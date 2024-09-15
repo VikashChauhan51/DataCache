@@ -4,9 +4,10 @@ namespace DataCache.Cache;
 
 public class MemoryCache : CacheBase, ICache
 {
-
+    private static readonly TimeSpan interval = TimeSpan.FromMinutes(1);
     public MemoryCache(CacheOptions cacheOptions) : base(cacheOptions)
     {
+        CleanUp();
     }
 
     public string Get(string key)
@@ -22,7 +23,7 @@ public class MemoryCache : CacheBase, ICache
 
     public void Put(string key, string value)
     {
-        var cacheItem = new CacheItem(value, DateTimeOffset.UtcNow);
+        var cacheItem = new CacheItem(value, DateTimeOffset.UtcNow, TimeSpan.Zero);
         long valueSize = CalculateCacheItemSize(cacheItem);
 
         EvictItemsToFit(valueSize);
@@ -36,7 +37,7 @@ public class MemoryCache : CacheBase, ICache
         }
         else
         {
-            _cacheMap.Add(key, cacheItem);
+            _cacheMap.TryAdd(key, cacheItem);
             _evictionStrategy.AddItem(key);
         }
 
@@ -77,5 +78,21 @@ public class MemoryCache : CacheBase, ICache
     }
 
     public long Count => _cacheMap.Count;
+
+    private void CleanUp()
+    {
+        Task.Run(async () =>
+        {
+            await Task.Delay(interval);
+            var keysToRemove = _cacheMap
+            .Where(x => x.Value.Ttl.HasValue)
+            .Where(x => x.Value.CreatedAt.Add(x.Value.Ttl!.Value) < DateTime.Now).Select(x => x.Key).ToList();
+            foreach (var item in keysToRemove)
+            {
+                TryDelete(item);
+            }
+
+        }).ContinueWith(_ => { CleanUp(); });
+    }
 
 }
