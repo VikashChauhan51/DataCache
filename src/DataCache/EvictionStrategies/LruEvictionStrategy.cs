@@ -8,21 +8,20 @@ namespace DataCache.EvictionStrategies;
 /// The LRU (Least Recently Used) strategy evicts the least recently accessed items.
 /// </summary>
 /// <typeparam name="TKey">The type of the key used to identify cache items. Must implement <see cref="IEquatable{TKey}"/> and cannot be null.</typeparam>
-public class LruEvictionStrategy<TKey> : IEvictionStrategy<TKey>
+public class LruEvictionStrategy<TKey> : EvictionStrategyBase, IEvictionStrategy<TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly LinkedList<TKey> accessOrder = new ();
     private readonly ConcurrentDictionary<TKey, LinkedListNode<TKey>> keyNodes = new ();
     private readonly object @lock = new ();
-    private readonly long maxSize;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LruEvictionStrategy{TKey}"/> class.
     /// </summary>
     /// <param name="cacheOptions">The configuration options for the cache, including settings such as the maximum memory size and default TTL (Time-To-Live) for cache entries.</param>
     public LruEvictionStrategy(CacheOptions cacheOptions)
+        : base(cacheOptions)
     {
-        this.maxSize = cacheOptions.MaxMemorySize;
     }
 
     /// <inheritdoc />

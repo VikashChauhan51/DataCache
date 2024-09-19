@@ -7,21 +7,20 @@ namespace DataCache.EvictionStrategies;
 /// This strategy tracks the order of keys to determine which one is the most recently used.
 /// </summary>
 /// <typeparam name="TKey">The type of the key used to identify cache items. Must implement <see cref="IEquatable{TKey}"/> and cannot be null.</typeparam>
-public class MruEvictionStrategy<TKey> : IEvictionStrategy<TKey>
+public class MruEvictionStrategy<TKey> : EvictionStrategyBase, IEvictionStrategy<TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly LinkedList<TKey> accessOrder = new ();
     private readonly Dictionary<TKey, LinkedListNode<TKey>> cacheMap = new ();
     private readonly object @lock = new ();
-    private readonly long maxSize;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MruEvictionStrategy{TKey}"/> class.
     /// </summary>
     /// <param name="cacheOptions">The configuration options for the cache, including settings such as the maximum memory size and default TTL (Time-To-Live) for cache entries.</param>
     public MruEvictionStrategy(CacheOptions cacheOptions)
+        : base(cacheOptions)
     {
-        this.maxSize = cacheOptions.MaxMemorySize;
     }
 
     /// <inheritdoc />

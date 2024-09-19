@@ -10,11 +10,9 @@ namespace DataCache.Cache;
 /// </summary>
 /// <typeparam name="TKey">The type of the key used to identify cache items. Must be non-null and implement <see cref="IEquatable{TKey}"/>.</typeparam>
 /// <typeparam name="TValue">The type of the value to be stored in the cache.</typeparam>
-public class HybridCache<TKey, TValue> : ICacheAsync<TKey, TValue>
+public class HybridCache<TKey, TValue> : CacheBase, ICacheAsync<TKey, TValue>
     where TKey : notnull, IEquatable<TKey>
 {
-    private readonly CacheOptions cacheOptions;
-
     private readonly IDataProviderAsync<TKey, TValue> provider;
     private readonly InMemoryDataProvider<TKey, TValue> inMemoryDataProvider;
 
@@ -32,9 +30,9 @@ public class HybridCache<TKey, TValue> : ICacheAsync<TKey, TValue>
     /// <param name="sizeCalculator">A function that calculates the memory size of each cache item. This function is used by the
     /// in-memory cache to track and manage the total cache size, ensuring that the cache does not exceed the specified memory limits.</param>
     public HybridCache(IDataProviderAsync<TKey, TValue> provider, CacheOptions cacheOptions, IEvictionStrategy<TKey> evictionStrategy, Func<TValue, long> sizeCalculator)
+        : base(cacheOptions)
     {
         this.provider = provider;
-        this.cacheOptions = cacheOptions;
         this.inMemoryDataProvider = new InMemoryDataProvider<TKey, TValue>(evictionStrategy, sizeCalculator);
     }
 
@@ -67,8 +65,8 @@ public class HybridCache<TKey, TValue> : ICacheAsync<TKey, TValue>
     /// <inheritdoc />
     public async Task SetAsync(TKey key, TValue value, TimeSpan? ttl)
     {
-        await this.inMemoryDataProvider.AddAsync(key, value, ttl.HasValue ? ttl : this.cacheOptions.DefaultTTL);
-        await this.provider.AddAsync(key, value, ttl.HasValue ? ttl : this.cacheOptions.DefaultTTL);
+        await this.inMemoryDataProvider.AddAsync(key, value, ttl.HasValue ? ttl : this.GetDefaultTimeToAlive());
+        await this.provider.AddAsync(key, value, ttl.HasValue ? ttl : this.GetDefaultTimeToAlive());
     }
 
     /// <inheritdoc />

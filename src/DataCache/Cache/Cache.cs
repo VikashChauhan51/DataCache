@@ -8,11 +8,9 @@ namespace DataCache.Cache;
 /// </summary>
 /// <typeparam name="TKey">The type of the key used to identify cache items. Must be non-null and implement <see cref="IEquatable{TKey}"/>.</typeparam>
 /// <typeparam name="TValue">The type of the value to be stored in the cache.</typeparam>
-public class Cache<TKey, TValue> : ICacheAsync<TKey, TValue>
+public class Cache<TKey, TValue> : CacheBase, ICacheAsync<TKey, TValue>
     where TKey : notnull, IEquatable<TKey>
 {
-    private readonly CacheOptions cacheOptions;
-
     private readonly IDataProviderAsync<TKey, TValue> provider;
 
     /// <summary>
@@ -23,9 +21,9 @@ public class Cache<TKey, TValue> : ICacheAsync<TKey, TValue>
     /// This provider defines how cache items are stored and retrieved.</param>
     /// <param name="cacheOptions">The configuration options for the cache, including settings such as the maximum memory size and default TTL (Time-To-Live) for cache entries.</param>
     public Cache(IDataProviderAsync<TKey, TValue> provider, CacheOptions cacheOptions)
+        : base(cacheOptions)
     {
         this.provider = provider;
-        this.cacheOptions = cacheOptions;
     }
 
     /// <inheritdoc />
@@ -51,7 +49,7 @@ public class Cache<TKey, TValue> : ICacheAsync<TKey, TValue>
     /// <inheritdoc />
     public async Task SetAsync(TKey key, TValue value, TimeSpan? ttl)
     {
-        await this.provider.AddAsync(key, value, ttl.HasValue ? ttl : this.cacheOptions.DefaultTTL);
+        await this.provider.AddAsync(key, value, ttl.HasValue ? ttl : this.GetDefaultTimeToAlive());
     }
 
     /// <inheritdoc />

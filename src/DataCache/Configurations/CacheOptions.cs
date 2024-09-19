@@ -7,18 +7,6 @@
 public class CacheOptions
 {
     /// <summary>
-    /// Gets the maximum allowed memory size for the cache, in bytes.
-    /// This defines the limit on the amount of memory that can be used by the cache before eviction policies are triggered.
-    /// </summary>
-    public long MaxMemorySize { get; init; }
-
-    /// <summary>
-    /// Gets the default time-to-live (TTL) interval for cache items.
-    /// If an item is added without specifying a TTL, this default value will be used to determine how long the item should remain in the cache.
-    /// </summary>
-    public TimeSpan DefaultTTL { get; init; }
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="CacheOptions"/> class.
     /// </summary>
     /// <param name="maxMemorySize">The maximum memory size (in bytes) allowed for the cache. Must be non-negative.</param>
@@ -39,5 +27,16 @@ public class CacheOptions
         this.MaxMemorySize = maxMemorySize;
         this.DefaultTTL = ttlInterval;
     }
-}
 
+    /// <summary>
+    /// Gets the maximum allowed memory size for the cache, in bytes.
+    /// This defines the limit on the amount of memory that can be used by the cache before eviction policies are triggered.
+    /// </summary>
+    public long MaxMemorySize { get; init; }
+
+    /// <summary>
+    /// Gets the default time-to-live (TTL) interval for cache items.
+    /// If an item is added without specifying a TTL, this default value will be used to determine how long the item should remain in the cache.
+    /// </summary>
+    public TimeSpan DefaultTTL { get; init; }
+}

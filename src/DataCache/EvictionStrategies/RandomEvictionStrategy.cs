@@ -7,12 +7,11 @@ namespace DataCache.EvictionStrategies;
 /// This strategy evicts items in a round-robin fashion, cycling through all keys in order.
 /// </summary>
 /// <typeparam name="TKey">The type of the key used to identify cache items. Must implement <see cref="IEquatable{TKey}"/> and cannot be null.</typeparam>
-public class RandomEvictionStrategy<TKey> : IEvictionStrategy<TKey>
+public class RandomEvictionStrategy<TKey> : EvictionStrategyBase, IEvictionStrategy<TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly List<TKey> keys = new ();
     private readonly object @lock = new ();
-    private readonly long maxSize;
     private int currentIndex = -1; // Tracks the current index for eviction
 
     /// <summary>
@@ -20,8 +19,8 @@ public class RandomEvictionStrategy<TKey> : IEvictionStrategy<TKey>
     /// </summary>
     /// <param name="cacheOptions">The configuration options for the cache, including settings such as the maximum memory size and default TTL (Time-To-Live) for cache entries.</param>
     public RandomEvictionStrategy(CacheOptions cacheOptions)
+        : base(cacheOptions)
     {
-        this.maxSize = cacheOptions.MaxMemorySize;
     }
 
     /// <inheritdoc />

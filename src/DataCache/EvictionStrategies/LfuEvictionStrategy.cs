@@ -7,21 +7,20 @@ namespace DataCache.EvictionStrategies;
 /// This strategy tracks the frequency of access to determine which key is the least frequently used.
 /// </summary>
 /// <typeparam name="TKey">The type of the key used to identify cache items. Must implement <see cref="IEquatable{TKey}"/> and cannot be null.</typeparam>
-public class LfuEvictionStrategy<TKey> : IEvictionStrategy<TKey>
+public class LfuEvictionStrategy<TKey> : EvictionStrategyBase, IEvictionStrategy<TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly Dictionary<TKey, int> accessCounts = new ();
     private readonly SortedDictionary<int, HashSet<TKey>> frequencyMap = new ();
     private readonly object @lock = new ();
-    private readonly long maxSize;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LfuEvictionStrategy{TKey}"/> class.
     /// </summary>
     /// <param name="cacheOptions">The configuration options for the cache, including settings such as the maximum memory size and default TTL (Time-To-Live) for cache entries.</param>
     public LfuEvictionStrategy(CacheOptions cacheOptions)
+        : base(cacheOptions)
     {
-        this.maxSize = cacheOptions.MaxMemorySize;
     }
 
     /// <inheritdoc />
