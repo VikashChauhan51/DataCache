@@ -1,4 +1,5 @@
 ﻿using DataCache.Abstraction;
+using DataCache.Configurations;
 
 namespace DataCache.EvictionStrategies;
 
@@ -11,7 +12,19 @@ public class MruEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : no
     private readonly LinkedList<TKey> _accessOrder = new();
     private readonly Dictionary<TKey, LinkedListNode<TKey>> _cacheMap = new();
     private readonly object _lock = new();
- 
+
+    private readonly long maxSize;
+
+    public MruEvictionStrategy(CacheOptions cacheOptions)
+    {
+        this.maxSize = cacheOptions.MaxMemorySize;
+    }
+
+    /// <inheritdoc />
+    public long MaxSize => this.maxSize;
+
+    /// <inheritdoc />
+    public long CurrentSize { get; private set; }
 
     /// <inheritdoc />
     public void OnItemAdded(TKey key)
@@ -43,7 +56,7 @@ public class MruEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : no
 
 
     /// <inheritdoc />
-    public void OnItemRemoved(TKey key)
+    public void OnItemRemoved(TKey key, long size)
     {
         lock (_lock)
         {
@@ -51,6 +64,7 @@ public class MruEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : no
             {
                 _accessOrder.Remove(node);
                 _cacheMap.Remove(key);
+                this.CurrentSize -= size;
             }
         }
     }

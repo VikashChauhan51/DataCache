@@ -1,4 +1,5 @@
 ﻿using DataCache.Abstraction;
+using DataCache.Configurations;
 using System.Collections.Concurrent;
 
 namespace DataCache.EvictionStrategies;
@@ -11,7 +12,20 @@ public class LruEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : no
 {
     private readonly LinkedList<TKey> _accessOrder = new();
     private readonly ConcurrentDictionary<TKey, LinkedListNode<TKey>> _keyNodes = new();
-    private readonly object _lock = new(); 
+    private readonly object _lock = new();
+
+    private readonly long maxSize;
+
+    public LruEvictionStrategy(CacheOptions cacheOptions)
+    {
+        this.maxSize = cacheOptions.MaxMemorySize;
+    }
+
+    /// <inheritdoc />
+    public long MaxSize => this.maxSize;
+
+    /// <inheritdoc />
+    public long CurrentSize { get; private set; }
 
     /// <inheritdoc />
     public void OnItemAdded(TKey key)
@@ -42,7 +56,7 @@ public class LruEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : no
 
 
     /// <inheritdoc />
-    public void OnItemRemoved(TKey key)
+    public void OnItemRemoved(TKey key, long size)
     {
         if (_keyNodes.TryRemove(key, out var node))
         {
@@ -50,6 +64,7 @@ public class LruEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : no
             {
                 _accessOrder.Remove(node);
             }
+            this.CurrentSize -= size;
         }
     }
 

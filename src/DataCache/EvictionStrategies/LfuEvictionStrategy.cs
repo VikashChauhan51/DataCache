@@ -1,30 +1,45 @@
 ﻿using DataCache.Abstraction;
+using DataCache.Configurations;
 
 namespace DataCache.EvictionStrategies;
-
 
 /// <summary>
 /// This strategy tracks the frequency of access to determine which key is the least frequently used.
 /// </summary>
-public class LfuEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : notnull, IEquatable<TKey>
+/// <typeparam name="TKey">The type of the key used to identify cache items. Must implement <see cref="IEquatable{TKey}"/> and cannot be null.</typeparam>
+public class LfuEvictionStrategy<TKey> : IEvictionStrategy<TKey>
+    where TKey : notnull, IEquatable<TKey>
 {
-    private readonly Dictionary<TKey, int> _accessCounts = new();
-    private readonly SortedDictionary<int, HashSet<TKey>> _frequencyMap = new();
-    private readonly object _lock = new();
+    private readonly Dictionary<TKey, int> accessCounts = new ();
+    private readonly SortedDictionary<int, HashSet<TKey>> frequencyMap = new ();
+    private readonly object @lock = new ();
 
+    private readonly long maxSize;
+
+    public LfuEvictionStrategy(CacheOptions cacheOptions)
+    {
+        this.maxSize = cacheOptions.MaxMemorySize;
+    }
+
+    /// <inheritdoc />
+    public long MaxSize => this.maxSize;
+
+    /// <inheritdoc />
+    public long CurrentSize { get; private set; }
 
     /// <inheritdoc />
     public void OnItemAdded(TKey key)
     {
-        lock (_lock)
+        lock (this.@lock)
         {
             // Initialize frequency to 1 for new items
-            _accessCounts[key] = 1;
-            if (!_frequencyMap.TryGetValue(1, out var keysAtFrequencyOne))
+            this.accessCounts[key] = 1;
+            if (!this.frequencyMap.TryGetValue(1, out var keysAtFrequencyOne))
             {
                 keysAtFrequencyOne = new HashSet<TKey>();
-                _frequencyMap[1] = keysAtFrequencyOne;
+                this.frequencyMap[1] = keysAtFrequencyOne;
             }
+
             keysAtFrequencyOne.Add(key);
         }
     }
@@ -32,44 +47,47 @@ public class LfuEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : no
     /// <inheritdoc />
     public void OnItemAccessed(TKey key)
     {
-        lock (_lock)
+        lock (this.@lock)
         {
-            if (_accessCounts.TryGetValue(key, out var oldFrequency))
+            if (this.accessCounts.TryGetValue(key, out var oldFrequency))
             {
                 // Update frequency map by removing from old frequency and adding to new frequency
-                _frequencyMap[oldFrequency].Remove(key);
-                if (_frequencyMap[oldFrequency].Count == 0)
+                this.frequencyMap[oldFrequency].Remove(key);
+                if (this.frequencyMap[oldFrequency].Count == 0)
                 {
-                    _frequencyMap.Remove(oldFrequency);
+                    this.frequencyMap.Remove(oldFrequency);
                 }
 
                 var newFrequency = oldFrequency + 1;
-                _accessCounts[key] = newFrequency;
+                this.accessCounts[key] = newFrequency;
 
-                if (!_frequencyMap.TryGetValue(newFrequency, out var keysAtNewFrequency))
+                if (!this.frequencyMap.TryGetValue(newFrequency, out var keysAtNewFrequency))
                 {
                     keysAtNewFrequency = new HashSet<TKey>();
-                    _frequencyMap[newFrequency] = keysAtNewFrequency;
+                    this.frequencyMap[newFrequency] = keysAtNewFrequency;
                 }
+
                 keysAtNewFrequency.Add(key);
             }
         }
     }
 
     /// <inheritdoc />
-    public void OnItemRemoved(TKey key)
+    public void OnItemRemoved(TKey key, long size)
     {
-        lock (_lock)
+        lock (this.@lock)
         {
-            if (_accessCounts.TryGetValue(key, out var frequency))
+            if (this.accessCounts.TryGetValue(key, out var frequency))
             {
                 // Remove the key from the frequency map and access counts
-                _frequencyMap[frequency].Remove(key);
-                if (_frequencyMap[frequency].Count == 0)
+                this.frequencyMap[frequency].Remove(key);
+                if (this.frequencyMap[frequency].Count == 0)
                 {
-                    _frequencyMap.Remove(frequency);
+                    this.frequencyMap.Remove(frequency);
                 }
-                _accessCounts.Remove(key);
+
+                this.accessCounts.Remove(key);
+                this.CurrentSize -= size;
             }
         }
     }
@@ -77,21 +95,21 @@ public class LfuEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : no
     /// <inheritdoc />
     public TKey GetEvictionKey()
     {
-        lock (_lock)
+        lock (this.@lock)
         {
-            if (_frequencyMap.Count > 0)
+            if (frequencyMap.Count > 0)
             {
                 // Get the set of items with the least frequency (first entry in SortedDictionary)
-                var leastFrequent = _frequencyMap.First();
+                var leastFrequent = frequencyMap.First();
                 var key = leastFrequent.Value.First();
 
                 // Remove the evicted key from the frequency map and access counts
                 leastFrequent.Value.Remove(key);
                 if (leastFrequent.Value.Count == 0)
                 {
-                    _frequencyMap.Remove(leastFrequent.Key);
+                    frequencyMap.Remove(leastFrequent.Key);
                 }
-                _accessCounts.Remove(key);
+                accessCounts.Remove(key);
 
                 return key;
             }

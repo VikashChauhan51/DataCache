@@ -1,6 +1,7 @@
 ﻿
 
 using DataCache.Abstraction;
+using DataCache.Configurations;
 
 namespace DataCache.EvictionStrategies;
 
@@ -12,6 +13,19 @@ public class RandomEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey :
     private readonly List<TKey> _keys = new();
     private int _currentIndex = -1; // Tracks the current index for eviction
     private readonly object _lock = new();
+
+    private readonly long maxSize;
+
+    public RandomEvictionStrategy(CacheOptions cacheOptions)
+    {
+        this.maxSize = cacheOptions.MaxMemorySize;
+    }
+
+    /// <inheritdoc />
+    public long MaxSize => this.maxSize;
+
+    /// <inheritdoc />
+    public long CurrentSize { get; private set; }
 
     /// <inheritdoc />
     public void OnItemAdded(TKey key)
@@ -35,7 +49,7 @@ public class RandomEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey :
 
 
     /// <inheritdoc />
-    public void OnItemRemoved(TKey key)
+    public void OnItemRemoved(TKey key, long size)
     {
         lock (_lock)
         {
@@ -50,6 +64,8 @@ public class RandomEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey :
                 {
                     _currentIndex = -1;
                 }
+
+                this.CurrentSize -= size;
             }
         }
     }
