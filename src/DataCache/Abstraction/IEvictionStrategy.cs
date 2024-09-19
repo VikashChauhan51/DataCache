@@ -1,6 +1,5 @@
 ﻿namespace DataCache.Abstraction;
 
-
 /// <summary>
 /// Defines an eviction strategy interface for tracking and evicting cache items based on a specific eviction policy.
 /// Implementations of this interface are responsible for determining which items should be evicted when necessary.
@@ -9,6 +8,16 @@
 public interface IEvictionStrategy<TKey>
     where TKey : notnull, IEquatable<TKey>
 {
+    /// <summary>
+    /// Gets the maximum allowed size of the cache (in bytes or other units), beyond which items will be evicted.
+    /// </summary>
+    long MaxSize { get; }
+
+    /// <summary>
+    /// Gets the current size of the cache (in bytes or other units), which is the total size of all items currently being tracked.
+    /// </summary>
+    long CurrentSize { get; }
+
     /// <summary>
     /// Adds a new item to the eviction tracking system.
     /// This method is called when a new item is added to the cache.
@@ -39,14 +48,4 @@ public interface IEvictionStrategy<TKey>
     /// The key of the evicted item.
     /// </returns>
     TKey GetEvictionKey();
-
-    /// <summary>
-    /// Gets the maximum allowed size of the cache (in bytes or other units), beyond which items will be evicted.
-    /// </summary>
-    long MaxSize { get; }
-
-    /// <summary>
-    /// Gets the current size of the cache (in bytes or other units), which is the total size of all items currently being tracked.
-    /// </summary>
-    long CurrentSize { get; }
 }

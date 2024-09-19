@@ -3,18 +3,22 @@ using DataCache.Configurations;
 
 namespace DataCache.EvictionStrategies;
 
-
 /// <summary>
 /// This strategy tracks the order of keys to determine which one is the most recently used.
 /// </summary>
-public class MruEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : notnull, IEquatable<TKey>
+/// <typeparam name="TKey">The type of the key used to identify cache items. Must implement <see cref="IEquatable{TKey}"/> and cannot be null.</typeparam>
+public class MruEvictionStrategy<TKey> : IEvictionStrategy<TKey>
+    where TKey : notnull, IEquatable<TKey>
 {
-    private readonly LinkedList<TKey> _accessOrder = new();
-    private readonly Dictionary<TKey, LinkedListNode<TKey>> _cacheMap = new();
-    private readonly object _lock = new();
-
+    private readonly LinkedList<TKey> accessOrder = new ();
+    private readonly Dictionary<TKey, LinkedListNode<TKey>> cacheMap = new ();
+    private readonly object @lock = new ();
     private readonly long maxSize;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MruEvictionStrategy{TKey}"/> class.
+    /// </summary>
+    /// <param name="cacheOptions">The configuration options for the cache, including settings such as the maximum memory size and default TTL (Time-To-Live) for cache entries.</param>
     public MruEvictionStrategy(CacheOptions cacheOptions)
     {
         this.maxSize = cacheOptions.MaxMemorySize;
@@ -29,41 +33,39 @@ public class MruEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : no
     /// <inheritdoc />
     public void OnItemAdded(TKey key)
     {
-        lock (_lock)
+        lock (this.@lock)
         {
-            if (!_cacheMap.ContainsKey(key))
+            if (!this.cacheMap.ContainsKey(key))
             {
                 var node = new LinkedListNode<TKey>(key);
-                _accessOrder.AddFirst(node);
-                _cacheMap[key] = node;
+                this.accessOrder.AddFirst(node);
+                this.cacheMap[key] = node;
             }
         }
     }
-
 
     /// <inheritdoc />
     public void OnItemAccessed(TKey key)
     {
-        lock (_lock)
+        lock (this.@lock)
         {
-            if (_cacheMap.TryGetValue(key, out var node))
+            if (this.cacheMap.TryGetValue(key, out var node))
             {
-                _accessOrder.Remove(node);
-                _accessOrder.AddFirst(node);
+                this.accessOrder.Remove(node);
+                this.accessOrder.AddFirst(node);
             }
         }
     }
 
-
     /// <inheritdoc />
     public void OnItemRemoved(TKey key, long size)
     {
-        lock (_lock)
+        lock (this.@lock)
         {
-            if (_cacheMap.TryGetValue(key, out var node))
+            if (this.cacheMap.TryGetValue(key, out var node))
             {
-                _accessOrder.Remove(node);
-                _cacheMap.Remove(key);
+                this.accessOrder.Remove(node);
+                this.cacheMap.Remove(key);
                 this.CurrentSize -= size;
             }
         }
@@ -72,13 +74,13 @@ public class MruEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : no
     /// <inheritdoc />
     public TKey GetEvictionKey()
     {
-        lock (_lock)
+        lock (this.@lock)
         {
-            var mostRecent = _accessOrder.First;
+            var mostRecent = this.accessOrder.First;
             if (mostRecent != null)
             {
-                _accessOrder.RemoveFirst();
-                _cacheMap.Remove(mostRecent.Value);
+                this.accessOrder.RemoveFirst();
+                this.cacheMap.Remove(mostRecent.Value);
                 return mostRecent.Value;
             }
         }

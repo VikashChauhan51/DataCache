@@ -13,9 +13,12 @@ public class LfuEvictionStrategy<TKey> : IEvictionStrategy<TKey>
     private readonly Dictionary<TKey, int> accessCounts = new ();
     private readonly SortedDictionary<int, HashSet<TKey>> frequencyMap = new ();
     private readonly object @lock = new ();
-
     private readonly long maxSize;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LfuEvictionStrategy{TKey}"/> class.
+    /// </summary>
+    /// <param name="cacheOptions">The configuration options for the cache, including settings such as the maximum memory size and default TTL (Time-To-Live) for cache entries.</param>
     public LfuEvictionStrategy(CacheOptions cacheOptions)
     {
         this.maxSize = cacheOptions.MaxMemorySize;
@@ -97,23 +100,25 @@ public class LfuEvictionStrategy<TKey> : IEvictionStrategy<TKey>
     {
         lock (this.@lock)
         {
-            if (frequencyMap.Count > 0)
+            if (this.frequencyMap.Count > 0)
             {
                 // Get the set of items with the least frequency (first entry in SortedDictionary)
-                var leastFrequent = frequencyMap.First();
+                var leastFrequent = this.frequencyMap.First();
                 var key = leastFrequent.Value.First();
 
                 // Remove the evicted key from the frequency map and access counts
                 leastFrequent.Value.Remove(key);
                 if (leastFrequent.Value.Count == 0)
                 {
-                    frequencyMap.Remove(leastFrequent.Key);
+                    this.frequencyMap.Remove(leastFrequent.Key);
                 }
-                accessCounts.Remove(key);
+
+                this.accessCounts.Remove(key);
 
                 return key;
             }
         }
+
         return default!;
     }
 }

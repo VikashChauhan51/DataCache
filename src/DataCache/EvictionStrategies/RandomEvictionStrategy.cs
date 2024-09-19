@@ -1,6 +1,4 @@
-﻿
-
-using DataCache.Abstraction;
+﻿using DataCache.Abstraction;
 using DataCache.Configurations;
 
 namespace DataCache.EvictionStrategies;
@@ -8,14 +6,19 @@ namespace DataCache.EvictionStrategies;
 /// <summary>
 /// This strategy evicts items in a round-robin fashion, cycling through all keys in order.
 /// </summary>
-public class RandomEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : notnull, IEquatable<TKey>
+/// <typeparam name="TKey">The type of the key used to identify cache items. Must implement <see cref="IEquatable{TKey}"/> and cannot be null.</typeparam>
+public class RandomEvictionStrategy<TKey> : IEvictionStrategy<TKey>
+    where TKey : notnull, IEquatable<TKey>
 {
-    private readonly List<TKey> _keys = new();
-    private int _currentIndex = -1; // Tracks the current index for eviction
-    private readonly object _lock = new();
-
+    private readonly List<TKey> keys = new ();
+    private readonly object @lock = new ();
     private readonly long maxSize;
+    private int currentIndex = -1; // Tracks the current index for eviction
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RandomEvictionStrategy{TKey}"/> class.
+    /// </summary>
+    /// <param name="cacheOptions">The configuration options for the cache, including settings such as the maximum memory size and default TTL (Time-To-Live) for cache entries.</param>
     public RandomEvictionStrategy(CacheOptions cacheOptions)
     {
         this.maxSize = cacheOptions.MaxMemorySize;
@@ -30,13 +33,12 @@ public class RandomEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey :
     /// <inheritdoc />
     public void OnItemAdded(TKey key)
     {
-       
-        lock (_lock)
+        lock (this.@lock)
         {
             // Add the new item to the list of keys
-            if (!_keys.Contains(key))
+            if (!this.keys.Contains(key))
             {
-                _keys.Add(key);
+                this.keys.Add(key);
             }
         }
     }
@@ -47,22 +49,21 @@ public class RandomEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey :
         // Round-robin doesn't care about access patterns, so this is a no-op
     }
 
-
     /// <inheritdoc />
     public void OnItemRemoved(TKey key, long size)
     {
-        lock (_lock)
+        lock (this.@lock)
         {
-            if (_keys.Remove(key))
+            if (this.keys.Remove(key))
             {
                 // Adjust the current index if necessary
-                if (_keys.Count > 0 && _currentIndex >= _keys.Count)
+                if (this.keys.Count > 0 && this.currentIndex >= this.keys.Count)
                 {
-                    _currentIndex = _currentIndex % _keys.Count;
+                    this.currentIndex = this.currentIndex % this.keys.Count;
                 }
-                else if (_keys.Count == 0)
+                else if (this.keys.Count == 0)
                 {
-                    _currentIndex = -1;
+                    this.currentIndex = -1;
                 }
 
                 this.CurrentSize -= size;
@@ -70,32 +71,31 @@ public class RandomEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey :
         }
     }
 
-
     /// <inheritdoc />
     public TKey GetEvictionKey()
     {
-        lock (_lock)
+        lock (this.@lock)
         {
-            if (_keys.Count == 0)
+            if (this.keys.Count == 0)
             {
                 return default!; // No item to evict
             }
 
             // Move to the next item in round-robin fashion
-            _currentIndex = (_currentIndex + 1) % _keys.Count;
-            var keyToEvict = _keys[_currentIndex];
+            this.currentIndex = (this.currentIndex + 1) % this.keys.Count;
+            var keyToEvict = this.keys[this.currentIndex];
 
             // Remove the key from the list
-            _keys.RemoveAt(_currentIndex);
+            this.keys.RemoveAt(this.currentIndex);
 
             // Adjust the current index, as the list size is reduced
-            if (_keys.Count > 0)
+            if (this.keys.Count > 0)
             {
-                _currentIndex = _currentIndex % _keys.Count;
+                this.currentIndex = this.currentIndex % this.keys.Count;
             }
             else
             {
-                _currentIndex = -1; // Reset if no items are left
+                this.currentIndex = -1; // Reset if no items are left
             }
 
             return keyToEvict;

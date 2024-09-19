@@ -23,7 +23,7 @@ public class InMemoryDataProvider<TKey, TValue> : IDataProviderAsync<TKey, TValu
     /// <summary>
     /// Initializes a new instance of the <see cref="InMemoryDataProvider{TKey, TValue}"/> class.
     /// </summary>
-    /// <param name="evictionStrategy">The eviction strategy used to manage cache eviction when memory limits are reached. 
+    /// <param name="evictionStrategy">The eviction strategy used to manage cache eviction when memory limits are reached.
     /// This strategy determines which items to remove when the cache exceeds the maximum size.</param>
     /// <param name="sizeCalculator">A function to calculate the memory size of each cache item. 
     /// This is used to track the total size of the in-memory cache and enforce size limits.</param>
