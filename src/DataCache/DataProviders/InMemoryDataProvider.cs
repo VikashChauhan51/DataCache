@@ -13,10 +13,10 @@ public class InMemoryDataProvider<TKey, TValue> : IDataProviderAsync<TKey, TValu
     where TKey : notnull, IEquatable<TKey>
 {
     private static readonly ConcurrentDictionary<TKey, CacheItem<TValue>> CacheMap = new ();
-
+    private static readonly TimeSpan minCleanupDelay = TimeSpan.FromMinutes(1);
+    private static readonly Semaphore semaphore = new Semaphore(1, 1);
     private readonly IEvictionStrategy<TKey> evictionStrategy;
     private readonly Func<TValue, long> sizeCalculator;
-    private readonly TimeSpan minCleanupDelay = TimeSpan.FromMinutes(1);
     private readonly object cleanupLock = new ();
     private readonly CancellationTokenSource cancellationTokenSource;
 
@@ -38,32 +38,51 @@ public class InMemoryDataProvider<TKey, TValue> : IDataProviderAsync<TKey, TValu
     /// <inheritdoc />
     public async Task AddAsync(TKey key, TValue value, TimeSpan? ttl)
     {
-        var size = this.sizeCalculator(value);
-        while (this.evictionStrategy.CurrentSize + size > this.evictionStrategy.MaxSize)
+        try
         {
-            var evictKey = this.evictionStrategy.GetEvictionKey();
-            await this.RemoveAsync(evictKey);
-        }
+            semaphore.WaitOne();
+            var size = this.sizeCalculator(value);
+            if (this.evictionStrategy.MaxSize > 0)
+            {
+                while (this.evictionStrategy.CurrentSize + size > this.evictionStrategy.MaxSize)
+                {
+                    var evictKey = this.evictionStrategy.GetEvictionKey();
+                    await this.RemoveAsync(evictKey);
+                }
+            }
 
-        DateTimeOffset? expirtedTime = ttl.HasValue ? DateTimeOffset.UtcNow.Add(ttl.Value) : null;
-        var cacheItem = new CacheItem<TValue>(value, DateTimeOffset.UtcNow, expirtedTime);
-        CacheMap[key] = cacheItem;
-        this.evictionStrategy.OnItemAdded(key);
+            DateTimeOffset? expirtedTime = ttl.HasValue ? DateTimeOffset.UtcNow.Add(ttl.Value) : null;
+            var cacheItem = new CacheItem<TValue>(value, DateTimeOffset.UtcNow, expirtedTime);
+            CacheMap[key] = cacheItem;
+            this.evictionStrategy.OnItemAdded(key);
+        }
+        finally
+        {
+            semaphore.Release();
+        }
     }
 
     /// <inheritdoc />
     public Task<TValue> GetAsync(TKey key)
     {
-        if (CacheMap.TryGetValue(key, out var cacheItem))
+        try
         {
-            if (cacheItem.ExpiredAt > DateTimeOffset.UtcNow)
+            semaphore.WaitOne();
+            if (CacheMap.TryGetValue(key, out var cacheItem))
             {
-                this.evictionStrategy.OnItemAccessed(key);
-                return Task.FromResult<TValue>(cacheItem.Value);
-            }
+                if (cacheItem.ExpiredAt > DateTimeOffset.UtcNow)
+                {
+                    this.evictionStrategy.OnItemAccessed(key);
+                    return Task.FromResult<TValue>(cacheItem.Value);
+                }
 
-            // remove in background thread.
-            this.RemoveAsync(key).ConfigureAwait(false);
+                // remove in background thread.
+                this.RemoveAsync(key).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            semaphore.Release();
         }
 
         return default!;
@@ -72,10 +91,18 @@ public class InMemoryDataProvider<TKey, TValue> : IDataProviderAsync<TKey, TValu
     /// <inheritdoc />
     public Task RemoveAsync(TKey key)
     {
-        if (CacheMap.TryRemove(key, out var cacheItem))
+        try
         {
-            var size = this.sizeCalculator(cacheItem.Value);
-            this.evictionStrategy.OnItemRemoved(key, size);
+            semaphore.WaitOne();
+            if (CacheMap.TryRemove(key, out var cacheItem))
+            {
+                var size = this.sizeCalculator(cacheItem.Value);
+                this.evictionStrategy.OnItemRemoved(key, size);
+            }
+        }
+        finally
+        {
+            semaphore.Release();
         }
 
         return Task.CompletedTask;
@@ -104,7 +131,7 @@ public class InMemoryDataProvider<TKey, TValue> : IDataProviderAsync<TKey, TValu
             {
                 while (!token.IsCancellationRequested)
                 {
-                    await Task.Delay(this.minCleanupDelay, token);
+                    await Task.Delay(minCleanupDelay, token);
 
                     if (!token.IsCancellationRequested)
                     {
