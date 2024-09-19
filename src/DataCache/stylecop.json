@@ -1,0 +1,54 @@
+﻿{
+  "rules": {
+    "indentation": {
+      "indentationSize": 4,
+      "useTabs": false
+    },
+    "spacing": {
+      "spaceAfterComma": true,
+      "spaceBeforeOpenSquareBracket": false,
+      "spaceBeforeOpenBrace": true,
+      "spaceAfterOpenParen": true,
+      "spaceBeforeCloseParen": false,
+      "spaceAfterCloseParen": false
+    },
+    "naming": {
+      "allowedIdentifiers": [],
+      "fileNamingConvention": "camelCase",
+      "memberNamingConvention": "camelCase",
+      "parameterNamingConvention": "camelCase",
+      "typeNamingConvention": "PascalCase",
+      "useCamelCaseForPrivateFields": true
+    },
+    "documentation": {
+      "documentInterfaces": true,
+      "documentProperties": true,
+      "documentMethods": true,
+      "documentFields": true,
+      "documentPublicClasses": true,
+      "documentInternalClasses": false,
+      "documentProtectedClasses": false
+    },
+    "documentationRules": {
+      "documentCtors": true,
+      "documentEnums": true,
+      "documentExceptions": true,
+      "documentProperties": true,
+      "documentMethods": true,
+      "documentFields": true
+    },
+    "ordering": {
+      "systemUsingDirectivesFirst": true,
+      "usingDirectivesPlacement": "outsideNamespace",
+      "usingsPlacement": "outsideNamespace"
+    },
+    "layout": {
+      "allowTrailingCommas": true,
+      "newlineAtEndOfFile": true,
+      "allowEmptyLinesInMembers": true
+    },
+    "maintainability": {
+      "maxLineLength": 120
+    }
+  }
+}
