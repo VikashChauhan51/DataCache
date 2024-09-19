@@ -1,26 +1,22 @@
 ﻿
 
+using DataCache.Abstraction;
+
 namespace DataCache.EvictionStrategies;
 
 /// <summary>
 /// This strategy evicts items in a round-robin fashion, cycling through all keys in order.
 /// </summary>
-public class RoundRobinEvictionStrategy : IEvictionStrategyAsync<string>
+public class RandomEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : notnull, IEquatable<TKey>
 {
-    private readonly List<string> _keys = new();
+    private readonly List<TKey> _keys = new();
     private int _currentIndex = -1; // Tracks the current index for eviction
     private readonly object _lock = new();
 
     /// <inheritdoc />
-    public Task AccessItemAsync(string key)
+    public void OnItemAdded(TKey key)
     {
-        // Round-robin doesn't care about access patterns, so this is a no-op
-        return Task.CompletedTask;
-    }
-
-    /// <inheritdoc />
-    public Task AddItemAsync(string key)
-    {
+       
         lock (_lock)
         {
             // Add the new item to the list of keys
@@ -29,11 +25,17 @@ public class RoundRobinEvictionStrategy : IEvictionStrategyAsync<string>
                 _keys.Add(key);
             }
         }
-        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public Task RemoveItemAsync(string key)
+    public void OnItemAccessed(TKey key)
+    {
+        // Round-robin doesn't care about access patterns, so this is a no-op
+    }
+
+
+    /// <inheritdoc />
+    public void OnItemRemoved(TKey key)
     {
         lock (_lock)
         {
@@ -50,17 +52,17 @@ public class RoundRobinEvictionStrategy : IEvictionStrategyAsync<string>
                 }
             }
         }
-        return Task.CompletedTask;
     }
 
+
     /// <inheritdoc />
-    public Task<string> EvictItemAsync()
+    public TKey GetEvictionKey()
     {
         lock (_lock)
         {
             if (_keys.Count == 0)
             {
-                return Task.FromResult<string>(default!); // No item to evict
+                return default!; // No item to evict
             }
 
             // Move to the next item in round-robin fashion
@@ -80,7 +82,7 @@ public class RoundRobinEvictionStrategy : IEvictionStrategyAsync<string>
                 _currentIndex = -1; // Reset if no items are left
             }
 
-            return Task.FromResult(keyToEvict);
+            return keyToEvict;
         }
     }
 }

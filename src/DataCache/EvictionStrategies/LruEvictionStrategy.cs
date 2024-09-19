@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using DataCache.Abstraction;
+using System.Collections.Concurrent;
 
 namespace DataCache.EvictionStrategies;
 
@@ -6,14 +7,28 @@ namespace DataCache.EvictionStrategies;
 /// <summary>
 /// The LRU (Least Recently Used) strategy evicts the least recently accessed items.
 /// </summary>
-public class LruEvictionStrategy : IEvictionStrategyAsync<string>
+public class LruEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : notnull, IEquatable<TKey>
 {
-    private readonly LinkedList<string> _accessOrder = new();
-    private readonly ConcurrentDictionary<string, LinkedListNode<string>> _keyNodes = new();
+    private readonly LinkedList<TKey> _accessOrder = new();
+    private readonly ConcurrentDictionary<TKey, LinkedListNode<TKey>> _keyNodes = new();
     private readonly object _lock = new(); 
 
     /// <inheritdoc />
-    public Task AccessItemAsync(string key)
+    public void OnItemAdded(TKey key)
+    {
+        var node = new LinkedListNode<TKey>(key);
+        if (_keyNodes.TryAdd(key, node))
+        {
+            lock (_lock)
+            {
+                _accessOrder.AddLast(node);
+            }
+        }
+    }
+
+
+    /// <inheritdoc />
+    public void OnItemAccessed(TKey key)
     {
         if (_keyNodes.TryGetValue(key, out var node))
         {
@@ -23,25 +38,11 @@ public class LruEvictionStrategy : IEvictionStrategyAsync<string>
                 _accessOrder.AddLast(node);
             }
         }
-        return Task.CompletedTask;
     }
 
-    /// <inheritdoc />
-    public Task AddItemAsync(string key)
-    {
-        var node = new LinkedListNode<string>(key);
-        if (_keyNodes.TryAdd(key, node))
-        {
-            lock (_lock)
-            {
-                _accessOrder.AddLast(node);
-            }
-        }
-        return Task.CompletedTask;
-    }
 
     /// <inheritdoc />
-    public Task RemoveItemAsync(string key)
+    public void OnItemRemoved(TKey key)
     {
         if (_keyNodes.TryRemove(key, out var node))
         {
@@ -50,23 +51,22 @@ public class LruEvictionStrategy : IEvictionStrategyAsync<string>
                 _accessOrder.Remove(node);
             }
         }
-        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public Task<string> EvictItemAsync()
+    public TKey GetEvictionKey()
     {
         lock (_lock)
         {
-            var oldest = _accessOrder.First; 
+            var oldest = _accessOrder.First;
             if (oldest != null)
             {
-                _accessOrder.RemoveFirst(); 
-                _keyNodes.TryRemove(oldest.Value, out _); 
-                return Task.FromResult(oldest.Value);
+                _accessOrder.RemoveFirst();
+                _keyNodes.TryRemove(oldest.Value, out _);
+                return oldest.Value;
             }
         }
-        return Task.FromResult<string>(default!);
+        return default!;
     }
 }
 

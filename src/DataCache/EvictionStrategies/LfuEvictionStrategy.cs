@@ -1,17 +1,36 @@
-﻿namespace DataCache.EvictionStrategies;
+﻿using DataCache.Abstraction;
+
+namespace DataCache.EvictionStrategies;
 
 
 /// <summary>
 /// This strategy tracks the frequency of access to determine which key is the least frequently used.
 /// </summary>
-public class LfuEvictionStrategy : IEvictionStrategyAsync<string>
+public class LfuEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : notnull, IEquatable<TKey>
 {
-    private readonly Dictionary<string, int> _accessCounts = new();
-    private readonly SortedDictionary<int, HashSet<string>> _frequencyMap = new();
+    private readonly Dictionary<TKey, int> _accessCounts = new();
+    private readonly SortedDictionary<int, HashSet<TKey>> _frequencyMap = new();
     private readonly object _lock = new();
 
+
     /// <inheritdoc />
-    public Task AccessItemAsync(string key)
+    public void OnItemAdded(TKey key)
+    {
+        lock (_lock)
+        {
+            // Initialize frequency to 1 for new items
+            _accessCounts[key] = 1;
+            if (!_frequencyMap.TryGetValue(1, out var keysAtFrequencyOne))
+            {
+                keysAtFrequencyOne = new HashSet<TKey>();
+                _frequencyMap[1] = keysAtFrequencyOne;
+            }
+            keysAtFrequencyOne.Add(key);
+        }
+    }
+
+    /// <inheritdoc />
+    public void OnItemAccessed(TKey key)
     {
         lock (_lock)
         {
@@ -29,34 +48,16 @@ public class LfuEvictionStrategy : IEvictionStrategyAsync<string>
 
                 if (!_frequencyMap.TryGetValue(newFrequency, out var keysAtNewFrequency))
                 {
-                    keysAtNewFrequency = new HashSet<string>();
+                    keysAtNewFrequency = new HashSet<TKey>();
                     _frequencyMap[newFrequency] = keysAtNewFrequency;
                 }
                 keysAtNewFrequency.Add(key);
             }
         }
-        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public Task AddItemAsync(string key)
-    {
-        lock (_lock)
-        {
-            // Initialize frequency to 1 for new items
-            _accessCounts[key] = 1;
-            if (!_frequencyMap.TryGetValue(1, out var keysAtFrequencyOne))
-            {
-                keysAtFrequencyOne = new HashSet<string>();
-                _frequencyMap[1] = keysAtFrequencyOne;
-            }
-            keysAtFrequencyOne.Add(key);
-        }
-        return Task.CompletedTask;
-    }
-
-    /// <inheritdoc />
-    public Task RemoveItemAsync(string key)
+    public void OnItemRemoved(TKey key)
     {
         lock (_lock)
         {
@@ -71,11 +72,10 @@ public class LfuEvictionStrategy : IEvictionStrategyAsync<string>
                 _accessCounts.Remove(key);
             }
         }
-        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public Task<string> EvictItemAsync()
+    public TKey GetEvictionKey()
     {
         lock (_lock)
         {
@@ -93,9 +93,9 @@ public class LfuEvictionStrategy : IEvictionStrategyAsync<string>
                 }
                 _accessCounts.Remove(key);
 
-                return Task.FromResult(key);
+                return key;
             }
         }
-        return Task.FromResult<string>(default!);
+        return default!;
     }
 }

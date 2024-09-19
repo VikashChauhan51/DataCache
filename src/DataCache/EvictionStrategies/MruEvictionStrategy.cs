@@ -1,17 +1,35 @@
-﻿namespace DataCache.EvictionStrategies;
+﻿using DataCache.Abstraction;
+
+namespace DataCache.EvictionStrategies;
 
 
 /// <summary>
 /// This strategy tracks the order of keys to determine which one is the most recently used.
 /// </summary>
-public class MruEvictionStrategy : IEvictionStrategyAsync<string>
+public class MruEvictionStrategy<TKey> : IEvictionStrategy<TKey> where TKey : notnull, IEquatable<TKey>
 {
-    private readonly LinkedList<string> _accessOrder = new();
-    private readonly Dictionary<string, LinkedListNode<string>> _cacheMap = new();
+    private readonly LinkedList<TKey> _accessOrder = new();
+    private readonly Dictionary<TKey, LinkedListNode<TKey>> _cacheMap = new();
     private readonly object _lock = new();
+ 
 
     /// <inheritdoc />
-    public Task AccessItemAsync(string key)
+    public void OnItemAdded(TKey key)
+    {
+        lock (_lock)
+        {
+            if (!_cacheMap.ContainsKey(key))
+            {
+                var node = new LinkedListNode<TKey>(key);
+                _accessOrder.AddFirst(node);
+                _cacheMap[key] = node;
+            }
+        }
+    }
+
+
+    /// <inheritdoc />
+    public void OnItemAccessed(TKey key)
     {
         lock (_lock)
         {
@@ -21,26 +39,11 @@ public class MruEvictionStrategy : IEvictionStrategyAsync<string>
                 _accessOrder.AddFirst(node);
             }
         }
-        return Task.CompletedTask;
     }
 
-    /// <inheritdoc />
-    public Task AddItemAsync(string key)
-    {
-        lock (_lock)
-        {
-            if (!_cacheMap.ContainsKey(key))
-            {
-                var node = new LinkedListNode<string>(key);
-                _accessOrder.AddFirst(node);
-                _cacheMap[key] = node;
-            }
-        }
-        return Task.CompletedTask;
-    }
 
     /// <inheritdoc />
-    public Task RemoveItemAsync(string key)
+    public void OnItemRemoved(TKey key)
     {
         lock (_lock)
         {
@@ -50,11 +53,10 @@ public class MruEvictionStrategy : IEvictionStrategyAsync<string>
                 _cacheMap.Remove(key);
             }
         }
-        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public Task<string> EvictItemAsync()
+    public TKey GetEvictionKey()
     {
         lock (_lock)
         {
@@ -63,9 +65,10 @@ public class MruEvictionStrategy : IEvictionStrategyAsync<string>
             {
                 _accessOrder.RemoveFirst();
                 _cacheMap.Remove(mostRecent.Value);
-                return Task.FromResult(mostRecent.Value);
+                return mostRecent.Value;
             }
         }
-        return Task.FromResult<string>(default!);
+
+        return default!;
     }
 }
