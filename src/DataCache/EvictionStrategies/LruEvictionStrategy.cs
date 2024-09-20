@@ -64,9 +64,8 @@ public class LruEvictionStrategy<TKey> : EvictionStrategyBase, IEvictionStrategy
             lock (this.@lock)
             {
                 this.accessOrder.Remove(node);
+                this.CurrentSize -= size;
             }
-
-            this.CurrentSize -= size;
         }
     }
 
