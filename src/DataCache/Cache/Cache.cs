@@ -1,60 +1,70 @@
-﻿using DataCache.Abstraction;
-using DataCache.Configurations;
+﻿using System.Collections.Concurrent;
 
 namespace DataCache.Cache;
 
-/// <summary>
-/// A cache implementation that supports asynchronous operations and eviction strategies.
-/// </summary>
-/// <typeparam name="TKey">The type of the key used to identify cache items. Must be non-null and implement <see cref="IEquatable{TKey}"/>.</typeparam>
-/// <typeparam name="TValue">The type of the value to be stored in the cache.</typeparam>
-public class Cache<TKey, TValue> : CacheBase, ICacheAsync<TKey, TValue>
-    where TKey : notnull, IEquatable<TKey>
+
+public class Cache<TValue> : IDisposable
 {
-    private readonly IDataProviderAsync<TKey, TValue> provider;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="Cache{TKey, TValue}"/> class, which provides a caching mechanism
-    /// with customizable options and a data provider for managing cache entries.
-    /// </summary>
-    /// <param name="provider">The data provider responsible for interacting with the underlying data source for cache operations.
-    /// This provider defines how cache items are stored and retrieved.</param>
-    /// <param name="cacheOptions">The configuration options for the cache, including settings such as the maximum memory size and default TTL (Time-To-Live) for cache entries.</param>
-    public Cache(IDataProviderAsync<TKey, TValue> provider, CacheOptions cacheOptions)
-        : base(cacheOptions)
+    private readonly ConcurrentDictionary<string, CacheItem<TValue>> _cache = new();
+    private readonly Task _cleanUpTask;   
+    public Cache()
     {
-        this.provider = provider;
-    }
-
-    /// <inheritdoc />
-    public async Task<TValue> GetAsync(TKey key)
-    {
-        return await this.provider.GetAsync(key);
-    }
-
-    /// <inheritdoc />
-    public async Task<TValue> GetOrSetAsync(TKey key, Func<Task<TValue>> valueFactory, TimeSpan? ttl)
-    {
-        var item = await this.provider.GetAsync(key);
-        if (item == null)
+        _cleanUpTask = Task.Run(async () =>
         {
-            item = await valueFactory();
+            while (true)
+            {
+                await Task.Delay(1000);
+                RemoveExpiredItems();
+            }
 
-            await this.SetAsync(key, item, ttl);
+        });
+    }
+
+    public void Set(string key, TValue value, TimeSpan ttl)
+    {
+        if (key is not null)
+        {
+            var expiration = DateTime.Now.Add(ttl);
+            var cacheItem = new CacheItem<TValue>(value, expiration);
+            _cache.AddOrUpdate(key, cacheItem, (oldKey, oldValue) => cacheItem);
         }
-
-        return item;
     }
 
-    /// <inheritdoc />
-    public async Task SetAsync(TKey key, TValue value, TimeSpan? ttl)
+    public TValue? Get(string key)
     {
-        await this.provider.AddAsync(key, value, ttl.HasValue ? ttl : this.GetDefaultTimeToAlive());
+        if (key is not null && _cache.TryGetValue(key, out var item))
+        {
+            if (!item.IsExpired)
+            {
+                return item.Value;
+            }
+            Remove(key);
+        }
+        return default;
+
     }
 
-    /// <inheritdoc />
-    public async Task RemoveAsync(TKey key)
+    public void Remove(string key)
     {
-        await this.provider.RemoveAsync(key);
+        if (key is not null)
+        {
+            _cache.TryRemove(key, out _);
+        }
+    }
+    public void Dispose()
+    {
+        _cache.Clear();
+        _cleanUpTask.Dispose();     
+    }
+
+    private void RemoveExpiredItems()
+    {
+        foreach (var key in _cache.Keys)
+        {
+            if (_cache.TryGetValue(key, out var item) && item.IsExpired)
+            {
+                Remove(key);
+            }
+        }
     }
 }
