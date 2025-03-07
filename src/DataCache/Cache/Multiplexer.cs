@@ -6,15 +6,10 @@ internal class Multiplexer : IDisposable
 {
     private readonly BlockingCollection<Func<Task>> _tasks = new(new ConcurrentQueue<Func<Task>>());
     private readonly CancellationTokenSource _cancellationTokenSource = new();
-    private readonly Thread _processingTask;
+    private readonly Task _processingTask;
     public Multiplexer()
     {
-        _processingTask = new Thread(ProcessTask)
-        {
-            IsBackground = true
-        };
-
-        _processingTask.Start();
+        _processingTask = Task.Run(ProcessTaskAsync, _cancellationTokenSource.Token);
 
     }
 
@@ -59,15 +54,15 @@ internal class Multiplexer : IDisposable
     {
         _cancellationTokenSource.Cancel();
         _tasks.CompleteAdding();
-        _processingTask.Join();
         _cancellationTokenSource.Dispose();
+        _processingTask.Dispose();
         _tasks.Dispose();
     }
-    private void ProcessTask()
+    private async Task ProcessTaskAsync()
     {
         foreach (var task in _tasks.GetConsumingEnumerable(_cancellationTokenSource.Token))
         {
-            task().Wait();
+            await task();
         }
     }
 }
