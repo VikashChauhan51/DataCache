@@ -3,7 +3,7 @@
 namespace DataCache.Cache;
 
 
-public class Cache<TValue> : IDisposable
+internal class Cache<TValue> : IDisposable
 {
     private readonly ConcurrentDictionary<string, CacheItem<TValue>> _cache = new();
     private readonly Task _cleanUpTask;   
